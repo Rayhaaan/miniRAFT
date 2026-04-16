@@ -1,0 +1,89 @@
+version: "3.9"
+
+networks:
+  raft-net:
+    driver: bridge
+
+services:
+  # ─── Replica 1 ───────────────────────────────────────────────────────────────
+  replica1:
+    build: ./replica1
+    container_name: replica1
+    environment:
+      - REPLICA_ID=replica1
+      - REPLICA_PORT=4001
+      - PEERS=http://replica2:4002,http://replica3:4003
+    ports:
+      - "4001:4001"
+    volumes:
+      - ./replica1:/app
+      - /app/node_modules
+    networks:
+      - raft-net
+    restart: unless-stopped
+
+  # ─── Replica 2 ───────────────────────────────────────────────────────────────
+  replica2:
+    build: ./replica2
+    container_name: replica2
+    environment:
+      - REPLICA_ID=replica2
+      - REPLICA_PORT=4002
+      - PEERS=http://replica1:4001,http://replica3:4003
+    ports:
+      - "4002:4002"
+    volumes:
+      - ./replica2:/app
+      - /app/node_modules
+    networks:
+      - raft-net
+    restart: unless-stopped
+
+  # ─── Replica 3 ───────────────────────────────────────────────────────────────
+  replica3:
+    build: ./replica3
+    container_name: replica3
+    environment:
+      - REPLICA_ID=replica3
+      - REPLICA_PORT=4003
+      - PEERS=http://replica1:4001,http://replica2:4002
+    ports:
+      - "4003:4003"
+    volumes:
+      - ./replica3:/app
+      - /app/node_modules
+    networks:
+      - raft-net
+    restart: unless-stopped
+
+  # ─── Gateway ─────────────────────────────────────────────────────────────────
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    environment:
+      - GATEWAY_PORT=3000
+      - REPLICAS=http://replica1:4001,http://replica2:4002,http://replica3:4003
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./gateway:/app
+      - /app/node_modules
+    networks:
+      - raft-net
+    depends_on:
+      - replica1
+      - replica2
+      - replica3
+    restart: unless-stopped
+
+  # ─── Frontend ────────────────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "8080:8080"
+    networks:
+      - raft-net
+    depends_on:
+      - gateway
+    restart: unless-stopped
